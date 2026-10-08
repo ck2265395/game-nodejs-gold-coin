@@ -1,0 +1,8 @@
+{
+  "name": "catch-coins-learning",
+  "version": "1.0.0",
+  "private": true,
+  "description": "接金币小游戏：第一步 Canvas 绘图",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "express": "^5.1.0" }
+}

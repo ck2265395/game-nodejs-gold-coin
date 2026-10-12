@@ -1,7 +1,25 @@
 const express = require('express');
 const path = require('node:path');
 
+const { loadConfig, WechatClient } = require('./payment/wechat');
+const { PaymentStore } = require('./payment/store');
+const { createPaymentRouter } = require('./payment/router');
 const app = express();
+let paymentOptions = {};
+try {
+  const loaded = loadConfig();
+  if (loaded.config) {
+    const config = loaded.config;
+    const store = new PaymentStore(process.env.PAYMENT_DB_PATH || path.join(__dirname, 'data/payments.sqlite'));
+    paymentOptions = { config, store, provider: new WechatClient(config) };
+  } else {
+    console.log('微信支付未配置，支付续命已关闭。缺少配置名：' + loaded.missing.join(', '));
+  }
+} catch {
+  console.error('微信支付配置无效，支付续命已关闭；请检查安全配置和密钥文件。');
+}
+app.use('/api/pay', createPaymentRouter(paymentOptions));
+app.use('/gold-coin/api/pay', createPaymentRouter(paymentOptions));
 const port = Number(process.env.PORT || 3000);
 
 if (!Number.isInteger(port) || port < 1 || port > 65535) {

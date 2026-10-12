@@ -105,7 +105,7 @@ Pointer Events 用同一套事件处理鼠标和触摸。`setPointerCapture` 确
 
 ## 阿里云宝塔部署（后期执行）
 
-当前开发完成的代码在 GitHub `work` 分支。请在宝塔为本项目创建独立目录和 Node.js 项目，启动命令 `npm start`，Node.js 版本至少 18，建议使用受支持的 LTS 版本。依赖优先用 `pnpm install --frozen-lockfile`，设置 `PORT` 为服务器上确认空闲的端口。不要覆盖现有网站文件或停止现有 Node.js 项目。
+当前开发完成的代码在 GitHub `work` 分支。请在宝塔为本项目创建独立目录和 Node.js 项目，启动命令 `npm start`，Node.js 版本使用 24（支付订单使用内置 SQLite）。依赖优先用 `pnpm install --frozen-lockfile`，设置 `PORT` 为服务器上确认空闲的端口。不要覆盖现有网站文件或停止现有 Node.js 项目。
 
 本项目同时支持 `/` 与 `/gold-coin/`，页面使用相对资源地址；裸 `/gold-coin` 会跳转到带尾斜杠的路径。在 `mitongxue.cn` 的现有 Nginx server 中增加以下 location（替换示例端口 3100 为实际空闲端口）：
 
@@ -144,3 +144,10 @@ location /gold-coin/ {
 暂停与后台自动暂停会冻结所有金币和生成计时，继续时不补发金币。重新开始会清空屏幕金币和计时，得分归零、生命恢复为 3、关卡回到 1。
 
 `npm test` 覆盖升级阈值、难度上限、多金币同时结算、暂停生成和重开复位，并保留键盘、触控、碰撞及部署子路径验证。
+
+
+## 微信支付续命
+
+支持微信 Native 扫码支付0.01元恢复1条生命，保留分数和关卡。未配置商户信息时支付入口隐藏，游戏保持可玩；没有模拟付款成功按钮。订单、回调验签、服务器查单和一次性兑换已实现，真实收款尚待商户安全配置与公网联调。
+
+配置和部署步骤见 [微信 Native 部署说明](docs/wechat-native-deployment.md)。密钥通过服务器文件和安全环境配置提供，不提交到仓库。

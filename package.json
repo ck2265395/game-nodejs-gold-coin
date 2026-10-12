@@ -3,6 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "description": "接金币小游戏：键盘与触控、计分、生命和暂停",
-  "scripts": { "start": "node server.js", "test": "node --test" },
-  "dependencies": { "express": "^5.1.0" }
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "qrcode": "1.5.4"
+  },
+  "engines": {
+    "node": ">=24"
+  }
 }

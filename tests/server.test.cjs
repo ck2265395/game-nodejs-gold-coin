@@ -27,7 +27,7 @@ test('根路径和 gold-coin 子路径均返回页面和正确的相对资源', 
       const response = await fetch(pageUrl);
       assert.equal(response.status, 200);
       const html = await response.text();
-      for (const file of ['game.js', 'style.css']) {
+      for (const file of ['game.js', 'style.css', 'payment.js']) {
         const match = html.match(new RegExp(`(?:src|href)="([^"]*${file})"`));
         assert.ok(match);
         const url = new URL(match[1], pageUrl);

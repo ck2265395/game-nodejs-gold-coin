@@ -6,6 +6,7 @@
   <title>接金币</title>
   <link rel="stylesheet" href="./style.css">
   <script src="./game.js" defer></script>
+  <script src="./payment.js" defer></script>
 </head>
 <body>
   <main>
@@ -19,6 +20,17 @@
       <h2>游戏结束</h2>
       <p>最终得分：<span id="final-score">0</span></p>
       <button id="restart" type="button">重新开始</button>
+      <button id="revive" type="button" hidden>微信支付 0.01 元续命</button>
+    </section>
+    <section id="pay-panel" aria-labelledby="pay-title" hidden>
+      <h2 id="pay-title">微信扫码续命 · 0.01 元</h2>
+      <p>支付后恢复 1 条生命，保留当前分数和关卡。电脑显示二维码，用手机微信扫描。</p>
+      <img id="pay-qr" width="256" height="256" alt="微信支付二维码" hidden>
+      <p id="pay-message" role="status" aria-live="polite"></p>
+      <button id="pay-check" type="button">检查支付结果</button>
+      <button id="pay-redeem" type="button" hidden>领取续命</button>
+      <button id="pay-cancel" type="button">关闭未付款订单</button>
+      <button id="pay-close" type="button">收起</button>
     </section>
     <div class="game-frame">
       <canvas id="game" width="480" height="640" aria-label="接金币游戏区域：下落金币、背景、地面和底部篮子">你的浏览器不支持 Canvas，请使用现代浏览器。</canvas>

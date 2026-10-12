@@ -30,6 +30,7 @@ function loadGame(autoStart = true) {
     };
   }
   const sandbox = vm.createContext({
+    crypto: { randomUUID: require('node:crypto').randomUUID, getRandomValues: values => require('node:crypto').webcrypto.getRandomValues(values) },
     document: { addEventListener(name, handler) { documentEvents[name] = handler; }, querySelector: (selector) => elements[selector] || ({ width: 480, height: 640, getContext: () => context }) },
     window: { addEventListener(name, handler) { events[name] = handler; } },
     requestAnimationFrame(callback) { nextFrame = callback; },
@@ -358,4 +359,31 @@ test('暂停不生成金币，重开回到第1关并清空旧金币和计时', (
   assert.equal(game.score.textContent, '0');
   assert.equal(game.run('coins.length'), 1);
   assert.equal(game.run('spawnElapsed'), 0);
+});
+
+test('续命仅作用于当前死亡标识，保留分数关卡并恢复1条生命',()=>{
+ const game=loadGame();catchCoins(game,20);
+ game.run('lives=1; coins.push({x:30,y:660,radius:12}); updateCoins(0.01)');
+ assert.equal(typeof game.run('window.coinGame'), 'object');
+ const death=game.run('window.coinGame.snapshot()');
+ assert.equal(game.run(`window.coinGame.revive({id:'order1',deathId:'wrong',snapshot:{score:20,level:3}})`),false);
+ assert.equal(game.run(`window.coinGame.revive({id:'order1',deathId:'${death.deathId}',snapshot:{score:20,level:3}})`),true);
+ assert.equal(game.score.textContent,'20');assert.equal(game.elements['#level'].textContent,'3');assert.equal(game.elements['#lives'].textContent,'1');
+ assert.equal(game.run('paused'),true);
+ assert.equal(game.run(`window.coinGame.revive({id:'order1',deathId:'${death.deathId}',snapshot:{score:20,level:3}})`),false);
+ game.elements['#restart'].click();assert.equal(game.elements['#lives'].textContent,'3');
+});
+
+test('未完成支付阻止重开时，不丢失当前死亡标识或续命资格',()=>{
+ const game=loadGame();game.run('lives=1; coins.push({x:30,y:660,radius:12}); updateCoins(0.01)');
+ const death=game.run('window.coinGame.snapshot()');
+ game.run('window.paymentUI = { onRestart: () => false }');
+ game.elements['#restart'].click();
+ assert.equal(game.run('window.coinGame.snapshot().deathId'),death.deathId);
+ assert.equal(game.run(`window.coinGame.revive({id:'pendingOrder',deathId:'${death.deathId}',snapshot:{score:0,level:1}})`),true);
+});
+
+test('普通HTTP浏览器缺少randomUUID时，死亡标识仍可生成',()=>{
+ const game=loadGame();game.run('crypto.randomUUID = undefined; lives=1; coins.push({x:30,y:660,radius:12}); updateCoins(0.01)');
+ assert.match(game.run('window.coinGame.snapshot().deathId'),/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
 });

@@ -37,6 +37,8 @@ const restartButton = document.querySelector('#restart');
 let score = 0;
 let lives = 3;
 let gameOver = false;
+let deathId = null;
+const redeemedOrders = new Set();
 let started = false;
 let paused = true;
 const playButton = document.querySelector('#play');
@@ -67,11 +69,13 @@ function updateCoins(deltaTime) {
       livesDisplay.textContent = String(lives);
       if (lives === 0) {
         gameOver = true;
+        deathId = createDeathId();
         pressedKeys.clear();
         activePointers.clear();
         finalScoreDisplay.textContent = String(score);
         gameOverPanel.hidden = false;
         updatePlayControls();
+        window.paymentUI?.onDeath(window.coinGame.snapshot());
         return; // 同帧后续金币不再扣血，生命不会变成负数。
       }
     }
@@ -150,6 +154,8 @@ function drawScene() {
 }
 
 function restartGame() {
+  if (window.paymentUI?.onRestart() === false) return;
+  deathId = null;
   score = 0;
   level = 1;
   levelDisplay.textContent = String(level);
@@ -216,6 +222,50 @@ function togglePlay() {
     pauseGame();
   }
 }
+
+function createDeathId() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  // getRandomValues 在普通 HTTP 上也可用，未开支付时不影响小游戏。
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+
+function gameSnapshot() {
+  return { score, level, lives, gameOver, deathId };
+}
+
+function restoreGame(saved) {
+  if (!saved || !Number.isSafeInteger(saved.score) || saved.score < 0 || saved.score > 10000000
+    || saved.level !== Math.floor(saved.score / 10) + 1 || !Number.isInteger(saved.lives)
+    || saved.lives < 0 || saved.lives > 3 || typeof saved.gameOver !== 'boolean'
+    || (saved.gameOver && (saved.lives !== 0 || typeof saved.deathId !== 'string'))
+    || (!saved.gameOver && saved.lives === 0)) return false;
+  score = saved.score; level = saved.level; lives = saved.lives;
+  gameOver = saved.gameOver; deathId = saved.gameOver ? saved.deathId : null;
+  started = true; paused = true;
+  scoreDisplay.textContent = String(score); levelDisplay.textContent = String(level);
+  livesDisplay.textContent = String(lives); finalScoreDisplay.textContent = gameOver ? String(score) : '';
+  gameOverPanel.hidden = !gameOver;
+  coins.length = 0; spawnElapsed = 0;
+  if (!gameOver) spawnCoin();
+  basket.x = (canvas.width - basket.width) / 2;
+  pressedKeys.clear(); activePointers.clear(); lastTime = null;
+  updatePlayControls(); drawScene();
+  return true;
+}
+
+function reviveGame(receipt) {
+  if (!gameOver || !deathId || receipt?.deathId !== deathId || !receipt.id || redeemedOrders.has(receipt.id)) return false;
+  if (receipt.snapshot?.score !== score || receipt.snapshot?.level !== level) return false;
+  const revived = restoreGame({ score, level, lives: 1, gameOver: false, deathId: null });
+  if (revived) redeemedOrders.add(receipt.id);
+  return revived;
+}
+
+window.coinGame = { snapshot: gameSnapshot, restore: restoreGame, revive: reviveGame };
 
 if (context) {
   playButton.addEventListener('click', togglePlay);

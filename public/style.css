@@ -19,3 +19,8 @@ canvas { display: block; width: 100%; height: auto; }
 #game-over h2 { margin: 0; }
 #restart { padding: 10px 20px; border: 0; border-radius: 8px; background: #315d92; color: #fff; font: inherit; cursor: pointer; }
 #restart:focus-visible { outline: 3px solid #e6a34b; outline-offset: 3px; }
+
+.movement-controls { display: flex; gap: 16px; margin-top: 16px; }
+.movement-controls button { flex: 1; min-height: 52px; border: 0; border-radius: 10px; background: #315d92; color: #fff; font: inherit; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
+.movement-controls button:active { background: #23456e; }
+.movement-controls button:focus-visible { outline: 3px solid #e6a34b; outline-offset: 3px; }

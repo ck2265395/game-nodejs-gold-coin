@@ -58,6 +58,7 @@ function updateCoin(deltaTime) {
     if (lives === 0) {
       gameOver = true;
       pressedKeys.clear();
+      activePointers.clear();
       finalScoreDisplay.textContent = String(score);
       gameOverPanel.hidden = false;
     } else {
@@ -68,11 +69,15 @@ function updateCoin(deltaTime) {
 
 // 记录哪些键正在按住，而不是每次按键事件只移动一次。
 const pressedKeys = new Set();
+// 指针和键盘分开记录，释放触控不会清掉仍按住的键。
+const activePointers = new Map();
 const movementKeys = new Set(['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD']);
 
 function updateBasket(deltaTime) {
-  const left = pressedKeys.has('ArrowLeft') || pressedKeys.has('KeyA');
-  const right = pressedKeys.has('ArrowRight') || pressedKeys.has('KeyD');
+  const left = pressedKeys.has('ArrowLeft') || pressedKeys.has('KeyA')
+    || [...activePointers.values()].includes(-1);
+  const right = pressedKeys.has('ArrowRight') || pressedKeys.has('KeyD')
+    || [...activePointers.values()].includes(1);
   const direction = Number(right) - Number(left);
 
   basket.x += direction * basket.speed * deltaTime;
@@ -135,13 +140,31 @@ function restartGame() {
   gameOverPanel.hidden = true;
   basket.x = (canvas.width - basket.width) / 2;
   pressedKeys.clear();
+  activePointers.clear();
   lastTime = null;
   resetCoin();
   drawScene();
   // 原有动画循环继续运行，重开时不再创建第二条循环。
 }
 
+function bindMovementButton(selector, direction) {
+  const button = document.querySelector(selector);
+  button.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || gameOver) return;
+    event.preventDefault();
+    // 捕获指针，手指移出按钮后松开也能收到事件。
+    button.setPointerCapture(event.pointerId);
+    activePointers.set(event.pointerId, direction);
+  });
+  const release = (event) => activePointers.delete(event.pointerId);
+  button.addEventListener('pointerup', release);
+  button.addEventListener('pointercancel', release);
+  button.addEventListener('lostpointercapture', release);
+}
+
 if (context) {
+  bindMovementButton('#move-left', -1);
+  bindMovementButton('#move-right', 1);
   restartButton.addEventListener('click', restartGame);
   window.addEventListener('keydown', (event) => {
     if (!movementKeys.has(event.code)) return;
@@ -158,6 +181,7 @@ if (context) {
   // 切换到其他窗口时清空输入，避免错过 keyup 导致一直移动。
   window.addEventListener('blur', () => {
     pressedKeys.clear();
+    activePointers.clear();
     lastTime = null;
   });
 

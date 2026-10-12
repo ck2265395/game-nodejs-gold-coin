@@ -20,6 +20,12 @@ function loadGame() {
     '#game-over': { hidden: true }, '#final-score': { textContent: '' },
     '#restart': { addEventListener(name, handler) { this[name] = handler; } },
   };
+  for (const id of ['#move-left', '#move-right']) {
+    elements[id] = {
+      addEventListener(name, handler) { this[name] = handler; },
+      setPointerCapture() {},
+    };
+  }
   const sandbox = vm.createContext({
     document: { querySelector: (selector) => elements[selector] || ({ width: 480, height: 640, getContext: () => context }) },
     window: { addEventListener(name, handler) { events[name] = handler; } },
@@ -172,5 +178,77 @@ test('重新开始恢复生命和得分、清空按键、居中篮子并恢复�
   assert.equal(first.y, -first.radius);
   const second = game.frame(10050);
   assert.ok(second.y > first.y);
+  assert.equal(game.run('basket.x'), 190);
+});
+
+
+function pointer(id = 1) { return { pointerId: id, button: 0, preventDefault() {} }; }
+
+for (const [selector, direction] of [['#move-left', -1], ['#move-right', 1]]) {
+  test(`触控 ${selector} 按住移动，松开停止`, () => {
+    const game = loadGame();
+    game.frame(0);
+    const button = game.elements[selector];
+    assert.equal(typeof button.pointerdown, 'function');
+    button.pointerdown(pointer());
+    game.frame(50);
+    const moved = game.run('basket.x');
+    assert.ok(direction * (moved - 190) > 0);
+    button.pointerup(pointer());
+    game.frame(100);
+    assert.equal(game.run('basket.x'), moved);
+  });
+}
+
+for (const event of ['pointercancel', 'lostpointercapture']) {
+  test(`${event} 清除触控移动`, () => {
+    const game = loadGame();
+    game.frame(0);
+    const button = game.elements['#move-right'];
+    assert.equal(typeof button.pointerdown, 'function');
+    button.pointerdown(pointer());
+    game.frame(50);
+    const moved = game.run('basket.x');
+    button[event](pointer());
+    game.frame(100);
+    assert.equal(game.run('basket.x'), moved);
+  });
+}
+
+test('双指相反方向抵消，松开一个后按剩余方向移动', () => {
+  const game = loadGame();
+  game.frame(0);
+  const left = game.elements['#move-left'];
+  const right = game.elements['#move-right'];
+  assert.equal(typeof left.pointerdown, 'function');
+  left.pointerdown(pointer(1)); right.pointerdown(pointer(2));
+  game.frame(50);
+  assert.equal(game.run('basket.x'), 190);
+  left.pointerup(pointer(1));
+  game.frame(100);
+  assert.ok(game.run('basket.x') > 190);
+});
+
+test('触控释放不会清除同方向的键盘输入', () => {
+  const game = loadGame();
+  game.frame(0);
+  const button = game.elements['#move-right'];
+  assert.equal(typeof button.pointerdown, 'function');
+  game.events.keydown({ code: 'ArrowRight', preventDefault() {} });
+  button.pointerdown(pointer()); button.pointerup(pointer());
+  game.frame(50);
+  assert.ok(game.run('basket.x') > 190);
+});
+
+test('切换窗口与重新开始都会清空触控状态', () => {
+  const game = loadGame();
+  game.frame(0);
+  const button = game.elements['#move-right'];
+  assert.equal(typeof button.pointerdown, 'function');
+  button.pointerdown(pointer()); game.events.blur();
+  game.frame(50); game.frame(100);
+  assert.equal(game.run('basket.x'), 190);
+  button.pointerdown(pointer()); game.elements['#restart'].click();
+  game.frame(150); game.frame(200);
   assert.equal(game.run('basket.x'), 190);
 });

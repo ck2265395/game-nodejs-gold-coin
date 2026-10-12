@@ -12,13 +12,22 @@ const basket = {
   speed: 300, // 每秒移动 300 个画布像素。
 };
 
-// 金币的 x、y 是圆心坐标；从画布顶部外侧开始下落。
-const coin = {
-  radius: 12,
-  x: canvas.width / 2,
-  y: -12,
-  speed: 180, // 每秒下落 180 个画布像素。
-};
+// 每枚金币保存圆心和半径；关卡决定统一的下落速度和生成间隔。
+const coins = [{ x: canvas.width / 2, y: -12, radius: 12 }];
+let spawnElapsed = 0;
+let level = 1;
+const levelDisplay = document.querySelector('#level');
+levelDisplay.textContent = String(level);
+
+function getDifficulty() {
+  const step = Math.min(level - 1, 9);
+  return { speed: 180 + step * 25, interval: Math.max(0.4, 1.5 - step * 0.15) };
+}
+
+function spawnCoin() {
+  const radius = 12;
+  coins.push({ radius, y: -radius, x: radius + Math.random() * (canvas.width - radius * 2) });
+}
 
 const scoreDisplay = document.querySelector('#score');
 const livesDisplay = document.querySelector('#lives');
@@ -35,40 +44,44 @@ const statusDisplay = document.querySelector('#status');
 livesDisplay.textContent = String(lives);
 scoreDisplay.textContent = String(score);
 
-function resetCoin() {
-  coin.y = -coin.radius;
-  coin.x = coin.radius + Math.random() * (canvas.width - coin.radius * 2);
-}
-
-function updateCoin(deltaTime) {
-  if (gameOver) return;
-  const previousBottom = coin.y + coin.radius;
-  coin.y += coin.speed * deltaTime;
-
-  // 用金币的包围盒检查横向重叠；底边必须从上方跨过篮子上沿。
-  // 比较前后两帧，避免金币跨过上沿时漏判，也避免从侧面移入时误计分。
-  const overlapsBasket = coin.x + coin.radius >= basket.x
-    && coin.x - coin.radius <= basket.x + basket.width;
-  const reachesBasket = previousBottom <= basket.y
-    && coin.y + coin.radius >= basket.y;
-
-  if (overlapsBasket && reachesBasket) {
-    score += 1;
-    scoreDisplay.textContent = String(score);
-    resetCoin();
-  } else if (coin.y - coin.radius > canvas.height) {
-    lives -= 1;
-    livesDisplay.textContent = String(lives);
-    if (lives === 0) {
-      gameOver = true;
-      pressedKeys.clear();
-      activePointers.clear();
-      finalScoreDisplay.textContent = String(score);
-      gameOverPanel.hidden = false;
-      updatePlayControls();
-    } else {
-      resetCoin();
+function updateCoins(deltaTime) {
+  if (gameOver || paused) return;
+  const speed = getDifficulty().speed;
+  for (let index = coins.length - 1; index >= 0; index--) {
+    const coin = coins[index];
+    const previousBottom = coin.y + coin.radius;
+    coin.y += speed * deltaTime;
+    // 底边从上方跨过篮子上沿，且包围盒横向重叠时算接住。
+    const overlapsBasket = coin.x + coin.radius >= basket.x
+      && coin.x - coin.radius <= basket.x + basket.width;
+    const reachesBasket = previousBottom <= basket.y && coin.y + coin.radius >= basket.y;
+    if (overlapsBasket && reachesBasket) {
+      coins.splice(index, 1);
+      score += 1;
+      level = Math.floor(score / 10) + 1;
+      scoreDisplay.textContent = String(score);
+      levelDisplay.textContent = String(level);
+    } else if (coin.y - coin.radius > canvas.height) {
+      coins.splice(index, 1);
+      lives -= 1;
+      livesDisplay.textContent = String(lives);
+      if (lives === 0) {
+        gameOver = true;
+        pressedKeys.clear();
+        activePointers.clear();
+        finalScoreDisplay.textContent = String(score);
+        gameOverPanel.hidden = false;
+        updatePlayControls();
+        return; // 同帧后续金币不再扣血，生命不会变成负数。
+      }
     }
+  }
+  // 只累计实际游戏时间，暂停和结束时不生成，也不补发金币。
+  spawnElapsed += deltaTime;
+  const interval = getDifficulty().interval;
+  while (spawnElapsed >= interval) {
+    spawnElapsed -= interval;
+    spawnCoin();
   }
 }
 
@@ -100,7 +113,7 @@ function gameLoop(currentTime) {
   lastTime = currentTime;
   if (!gameOver && !paused) {
     updateBasket(deltaTime);
-    updateCoin(deltaTime);
+    updateCoins(deltaTime);
   }
   drawScene();
   requestAnimationFrame(gameLoop);
@@ -111,14 +124,15 @@ function drawScene() {
   context.fillStyle = '#dceefa';
   context.fillRect(0, 0, canvas.width, canvas.height);
 
-  // arc 的圆心、半径和起止角度决定金币形状。
-  context.beginPath();
-  context.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
-  context.fillStyle = '#f5c542';
-  context.fill();
-  context.strokeStyle = '#b87916';
-  context.lineWidth = 2;
-  context.stroke();
+  for (const coin of coins) {
+    context.beginPath();
+    context.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
+    context.fillStyle = '#f5c542';
+    context.fill();
+    context.strokeStyle = '#b87916';
+    context.lineWidth = 2;
+    context.stroke();
+  }
 
   context.fillStyle = '#bfd8b8';
   context.fillRect(0, canvas.height - 32, canvas.width, 32);
@@ -137,6 +151,11 @@ function drawScene() {
 
 function restartGame() {
   score = 0;
+  level = 1;
+  levelDisplay.textContent = String(level);
+  spawnElapsed = 0;
+  coins.length = 0;
+  spawnCoin();
   lives = 3;
   gameOver = false;
   started = true;
@@ -150,7 +169,6 @@ function restartGame() {
   pressedKeys.clear();
   activePointers.clear();
   lastTime = null;
-  resetCoin();
   drawScene();
   // 原有动画循环继续运行，重开时不再创建第二条循环。
 }

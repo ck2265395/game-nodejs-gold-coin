@@ -17,6 +17,7 @@ function loadGame(autoStart = true) {
   };
   const score = { textContent: '0' };
   const elements = {
+    '#level': { textContent: '1' },
     '#status': { textContent: '' },
     '#score': score, '#lives': { textContent: '3' },
     '#game-over': { hidden: true }, '#final-score': { textContent: '' },
@@ -53,24 +54,15 @@ test('金币随动画帧下落，水平位置不变', () => {
   assert.equal(second.radius, first.radius);
 });
 
-test('金币完全离开底部后从顶部重生，横向位置在画布内', () => {
+test('漏接金币被移除，下一枚由生成计时器产生', () => {
   const game = loadGame();
-  game.run('coin.x = 30'); // 避开篮子，验证漏接重生。
-  let previous = game.frame(0);
-  assert.ok(previous, '应绘制金币');
-  let respawned = false;
-  for (let time = 50; time <= 10000; time += 50) {
-    const current = game.frame(time);
-    if (current.y < previous.y) {
-      assert.ok(previous.y + current.radius >= 640);
-      assert.equal(current.y, -current.radius);
-      assert.ok(current.x >= current.radius && current.x <= 480 - current.radius);
-      respawned = true;
-      break;
-    }
-    previous = current;
-  }
-  assert.ok(respawned, '应在合理时间内重生');
+  game.frame(0);
+  game.run('coins[0].x = 30; coins[0].y = 660');
+  game.frame(50);
+  assert.equal(game.run('coins.length'), 0);
+  for (let time = 100; time <= 1500; time += 50) game.frame(time);
+  assert.ok(game.run('coins.length') >= 1);
+  assert.ok(game.run('coins.every(c => c.x >= c.radius && c.x <= 480 - c.radius)'));
 });
 
 test('原有篮子按键移动并在松开后停止', () => {
@@ -87,24 +79,24 @@ test('原有篮子按键移动并在松开后停止', () => {
 });
 
 
-test('金币到达篮子上沿时加一分并重生，只计一次', () => {
+test('金币到达篮子上沿时加一分并移除，只计一次', () => {
   const game = loadGame();
   game.frame(0);
-  game.run('coin.x = basket.x + basket.width / 2; coin.y = basket.y - coin.radius - 1');
+  game.run('coins[0].x = basket.x + basket.width / 2; coins[0].y = basket.y - coins[0].radius - 1');
   assert.equal(game.score.textContent, '0');
   const current = game.frame(50);
   assert.equal(game.score.textContent, '1');
-  assert.equal(current.y, -current.radius);
+  assert.equal(current, undefined);
   game.frame(100);
   assert.equal(game.score.textContent, '1');
 });
 
-test('金币漏接后重生，不加分', () => {
+test('金币漏接后移除，不加分', () => {
   const game = loadGame();
   game.frame(0);
-  game.run('coin.x = 30; coin.y = canvas.height + coin.radius - 1');
+  game.run('coins[0].x = 30; coins[0].y = canvas.height + coins[0].radius - 1');
   const current = game.frame(50);
-  assert.equal(current.y, -current.radius);
+  assert.equal(current, undefined);
   assert.equal(game.score.textContent, '0');
 });
 
@@ -117,7 +109,7 @@ for (const [name, offset, caught] of [
   test(`接住边界：${name}`, () => {
     const game = loadGame();
     game.frame(0);
-    game.run(`coin.x = basket.x + ${offset}; coin.y = basket.y - coin.radius - 1`);
+    game.run(`coins[0].x = basket.x + ${offset}; coins[0].y = basket.y - coins[0].radius - 1`);
     game.frame(50);
     assert.equal(game.score.textContent, caught ? '1' : '0');
   });
@@ -126,7 +118,7 @@ for (const [name, offset, caught] of [
 test('金币已在篮子上沿下方时，不从侧面误计分', () => {
   const game = loadGame();
   game.frame(0);
-  game.run('coin.x = basket.x + 50; coin.y = basket.y + 20');
+  game.run('coins[0].x = basket.x + 50; coins[0].y = basket.y + 20');
   game.frame(50);
   assert.equal(game.score.textContent, '0');
 });
@@ -135,10 +127,10 @@ test('金币已在篮子上沿下方时，不从侧面误计分', () => {
 test('每次漏接扣一条生命，第三次漏接结束并显示最终得分', () => {
   const game = loadGame();
   game.frame(0);
-  game.run('coin.x = basket.x + 50; coin.y = basket.y - coin.radius - 1');
+  game.run('coins[0].x = basket.x + 50; coins[0].y = basket.y - coins[0].radius - 1');
   game.frame(50);
   for (let i = 1; i <= 3; i++) {
-    game.run('coin.x = 30; coin.y = 660');
+    game.run('coins.splice(0, coins.length, { x: 30, y: 660, radius: 12 })');
     game.frame(50 + i * 50);
     assert.equal(game.elements['#lives'].textContent, String(3 - i));
     assert.equal(game.elements['#game-over'].hidden, i !== 3);
@@ -150,13 +142,13 @@ test('游戏结束后金币和篮子停止，生命与得分不再变化', () =>
   const game = loadGame();
   game.frame(0);
   for (let i = 1; i <= 3; i++) {
-    game.run('coin.x = 30; coin.y = 660');
+    game.run('coins.splice(0, coins.length, { x: 30, y: 660, radius: 12 })');
     game.frame(i * 50);
   }
-  const position = game.run('[coin.y, basket.x].join()');
+  const position = game.run('[coins.map(c => c.y).join(), basket.x].join()');
   game.events.keydown({ code: 'ArrowRight', preventDefault() {} });
   game.frame(200);
-  assert.equal(game.run('[coin.y, basket.x].join()'), position);
+  assert.equal(game.run('[coins.map(c => c.y).join(), basket.x].join()'), position);
   assert.equal(game.elements['#lives'].textContent, '0');
   assert.equal(game.score.textContent, '0');
 });
@@ -164,11 +156,11 @@ test('游戏结束后金币和篮子停止，生命与得分不再变化', () =>
 test('重新开始恢复生命和得分、清空按键、居中篮子并恢复动画', () => {
   const game = loadGame();
   game.frame(0);
-  game.run('coin.x = basket.x + 50; coin.y = basket.y - coin.radius - 1');
+  game.run('coins[0].x = basket.x + 50; coins[0].y = basket.y - coins[0].radius - 1');
   game.frame(50);
   game.events.keydown({ code: 'ArrowRight', preventDefault() {} });
   for (let i = 1; i <= 3; i++) {
-    game.run('coin.x = 30; coin.y = 660');
+    game.run('coins.splice(0, coins.length, { x: 30, y: 660, radius: 12 })');
     game.frame(50 + i * 50);
   }
   assert.equal(typeof game.elements['#restart'].click, 'function');
@@ -274,14 +266,14 @@ test('暂停冻结位置，继续时清空按键且不补算暂停时间', () =>
   game.frame(50);
   assert.equal(typeof game.elements['#play'].click, 'function');
   game.elements['#play'].click();
-  const position = game.run('[coin.y, basket.x].join()');
+  const position = game.run('[coins.map(c => c.y).join(), basket.x].join()');
   game.frame(10000);
-  assert.equal(game.run('[coin.y, basket.x].join()'), position);
+  assert.equal(game.run('[coins.map(c => c.y).join(), basket.x].join()'), position);
   game.elements['#play'].click();
   game.frame(20000);
-  assert.equal(game.run('[coin.y, basket.x].join()'), position);
+  assert.equal(game.run('[coins.map(c => c.y).join(), basket.x].join()'), position);
   game.frame(20050);
-  assert.ok(game.run('coin.y') > Number(position.split(',')[0]));
+  assert.ok(game.run('coins[0].y') > Number(position.split(',')[0]));
   assert.equal(game.run('basket.x'), Number(position.split(',')[1]));
 });
 
@@ -289,9 +281,9 @@ test('失去焦点会暂停，恢复焦点后需要手动继续', () => {
   const game = loadGame();
   game.frame(0);
   game.events.blur();
-  const y = game.run('coin.y');
+  const y = game.run('coins[0].y');
   game.frame(50); game.frame(100);
-  assert.equal(game.run('coin.y'), y);
+  assert.equal(game.run('coins[0].y'), y);
   assert.equal(game.elements['#play'].textContent, '继续游戏');
 });
 
@@ -304,4 +296,66 @@ test('页面进入后台时暂停', () => {
   const first = game.frame(50);
   assert.equal(game.frame(100).y, first.y);
   assert.equal(game.elements['#play'].textContent, '继续游戏');
+});
+
+function catchCoins(game, count) {
+  for (let i = 0; i < count; i++) {
+    game.run('coins.splice(0, coins.length, { x: basket.x + 50, y: basket.y - 12, radius: 12 }); updateCoins(0.01)');
+  }
+}
+
+test('第10枚升到第2关，第20枚升到第3关', () => {
+  const game = loadGame();
+  catchCoins(game, 9);
+  assert.equal(game.elements['#level'].textContent, '1');
+  catchCoins(game, 1);
+  assert.equal(game.elements['#level'].textContent, '2');
+  catchCoins(game, 10);
+  assert.equal(game.elements['#level'].textContent, '3');
+  assert.equal(game.score.textContent, '20');
+});
+
+test('高关卡相同时间生成更多金币，下落更快且存在难度上限', () => {
+  function simulate(catches) {
+    const game = loadGame();
+    catchCoins(game, catches);
+    game.run('coins.length = 0; spawnElapsed = 0');
+    game.frame(0);
+    for (let time = 50; time <= 2000; time += 50) game.frame(time);
+    return { count: game.run('coins.length'), speed: game.run('getDifficulty().speed'), interval: game.run('getDifficulty().interval') };
+  }
+  const low = simulate(0), high = simulate(40), capped = simulate(90), beyond = simulate(200);
+  assert.ok(high.count > low.count);
+  assert.ok(high.speed > low.speed);
+  assert.ok(high.interval < low.interval);
+  assert.equal(capped.speed, beyond.speed);
+  assert.equal(capped.interval, beyond.interval);
+});
+
+test('多枚金币同帧接住分别计分，漏接最多扣到0并停止', () => {
+  const game = loadGame();
+  game.run('coins.splice(0, coins.length, ...Array.from({length: 3}, () => ({ x: basket.x + 50, y: basket.y - 12, radius: 12 }))); updateCoins(0.01)');
+  assert.equal(game.score.textContent, '3');
+  assert.equal(game.run('coins.length'), 0);
+  game.run('coins.push(...Array.from({length: 5}, () => ({x: 30, y: 660, radius: 12}))); updateCoins(0.01)');
+  assert.equal(game.elements['#lives'].textContent, '0');
+  assert.equal(game.elements['#game-over'].hidden, false);
+  const remaining = game.run('JSON.stringify(coins)');
+  game.run('updateCoins(1)');
+  assert.equal(game.run('JSON.stringify(coins)'), remaining);
+});
+
+test('暂停不生成金币，重开回到第1关并清空旧金币和计时', () => {
+  const game = loadGame();
+  catchCoins(game, 30);
+  game.run('coins.length = 0; spawnElapsed = 0');
+  game.elements['#play'].click();
+  game.frame(0);
+  for(let time = 50; time <= 2000; time += 50) game.frame(time);
+  assert.equal(game.run('coins.length'), 0);
+  game.elements['#restart'].click();
+  assert.equal(game.elements['#level'].textContent, '1');
+  assert.equal(game.score.textContent, '0');
+  assert.equal(game.run('coins.length'), 1);
+  assert.equal(game.run('spawnElapsed'), 0);
 });

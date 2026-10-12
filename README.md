@@ -101,3 +101,26 @@ Pointer Events 用同一套事件处理鼠标和触摸。`setPointerCapture` 确
 ## 完整一局：开始与暂停
 
 打开页面先点击“开始游戏”；运行中可暂停和继续。切换窗口或页面进入后台会自动暂停，回到页面后手动继续，避免离开时损失生命。暂停冻结金币和篮子，继续不会补算暂停时间，也不会保留旧按键。结束后点击“重新开始”即可再玩一局。
+
+
+## 阿里云宝塔部署（后期执行）
+
+当前开发完成的代码在 GitHub `work` 分支。请在宝塔为本项目创建独立目录和 Node.js 项目，启动命令 `npm start`，Node.js 版本至少 18，建议使用受支持的 LTS 版本。依赖优先用 `pnpm install --frozen-lockfile`，设置 `PORT` 为服务器上确认空闲的端口。不要覆盖现有网站文件或停止现有 Node.js 项目。
+
+本项目同时支持 `/` 与 `/gold-coin/`，页面使用相对资源地址；裸 `/gold-coin` 会跳转到带尾斜杠的路径。在 `mitongxue.cn` 的现有 Nginx server 中增加以下 location（替换示例端口 3100 为实际空闲端口）：
+
+```nginx
+location = /gold-coin {
+    return 308 /gold-coin/;
+}
+location /gold-coin/ {
+    proxy_pass http://127.0.0.1:3100;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+```
+
+`proxy_pass` 末尾不加斜杠，保留 `/gold-coin/` 前缀由本项目处理。保留现有网站其他配置，检查 Nginx 配置通过后再重载。沿用域名现有 HTTPS 配置；Node.js 内部端口无需开放到公网。随后访问 `https://mitongxue.cn/gold-coin/` 验证开始、触控、暂停和重开。这里是部署说明，尚未部署到服务器。
+
+开发验收：`npm test`。测试包含游戏行为，以及独立启动服务后根路径和子路径的页面、资源与跳转检查。云端服务进程需在修改 `server.js` 后重启。

@@ -10,10 +10,17 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 }
 
 // 服务端只负责把 public 中的文件发送给浏览器。
-app.use(express.static(path.join(__dirname, 'public')));
+const publicDirectory = path.join(__dirname, 'public');
+// 保留根路径开发入口，同时支持现有网站下的独立游戏路径。
+app.get('/gold-coin', (req, res, next) => {
+  if (req.path === '/gold-coin') return res.redirect(308, '/gold-coin/');
+  next();
+});
+app.use('/gold-coin', express.static(publicDirectory));
+app.use(express.static(publicDirectory));
 
 const server = app.listen(port, () => {
-  console.log(`接金币第一步：http://localhost:${port}`);
+  console.log(`接金币：http://localhost:${port}`);
   console.log('按 Ctrl+C 停止服务。');
 });
 

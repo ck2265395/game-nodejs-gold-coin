@@ -28,6 +28,10 @@ const restartButton = document.querySelector('#restart');
 let score = 0;
 let lives = 3;
 let gameOver = false;
+let started = false;
+let paused = true;
+const playButton = document.querySelector('#play');
+const statusDisplay = document.querySelector('#status');
 livesDisplay.textContent = String(lives);
 scoreDisplay.textContent = String(score);
 
@@ -61,6 +65,7 @@ function updateCoin(deltaTime) {
       activePointers.clear();
       finalScoreDisplay.textContent = String(score);
       gameOverPanel.hidden = false;
+      updatePlayControls();
     } else {
       resetCoin();
     }
@@ -93,7 +98,7 @@ function gameLoop(currentTime) {
   // 切换窗口后限制时间差，避免恢复时篮子突然跳很远。
   const deltaTime = lastTime === null ? 0 : Math.min((currentTime - lastTime) / 1000, 0.05);
   lastTime = currentTime;
-  if (!gameOver) {
+  if (!gameOver && !paused) {
     updateBasket(deltaTime);
     updateCoin(deltaTime);
   }
@@ -134,6 +139,9 @@ function restartGame() {
   score = 0;
   lives = 3;
   gameOver = false;
+  started = true;
+  paused = false;
+  updatePlayControls();
   scoreDisplay.textContent = String(score);
   livesDisplay.textContent = String(lives);
   finalScoreDisplay.textContent = '';
@@ -150,7 +158,7 @@ function restartGame() {
 function bindMovementButton(selector, direction) {
   const button = document.querySelector(selector);
   button.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0 || gameOver) return;
+    if (event.button !== 0 || gameOver || paused) return;
     event.preventDefault();
     // 捕获指针，手指移出按钮后松开也能收到事件。
     button.setPointerCapture(event.pointerId);
@@ -162,14 +170,45 @@ function bindMovementButton(selector, direction) {
   button.addEventListener('lostpointercapture', release);
 }
 
+function updatePlayControls() {
+  playButton.disabled = gameOver;
+  playButton.textContent = !started ? '开始游戏' : paused ? '继续游戏' : '暂停游戏';
+  statusDisplay.textContent = gameOver ? '游戏结束，点击重新开始再玩一局。'
+    : !started ? '准备好后点击开始游戏。' : paused ? '已暂停，点击继续游戏。' : '游戏进行中';
+}
+
+function pauseGame() {
+  pressedKeys.clear();
+  activePointers.clear();
+  lastTime = null;
+  if (started && !gameOver) paused = true;
+  updatePlayControls();
+}
+
+function togglePlay() {
+  if (gameOver) return;
+  if (paused) {
+    started = true;
+    paused = false;
+    pressedKeys.clear();
+    activePointers.clear();
+    lastTime = null;
+    updatePlayControls();
+  } else {
+    pauseGame();
+  }
+}
+
 if (context) {
+  playButton.addEventListener('click', togglePlay);
+  updatePlayControls();
   bindMovementButton('#move-left', -1);
   bindMovementButton('#move-right', 1);
   restartButton.addEventListener('click', restartGame);
   window.addEventListener('keydown', (event) => {
     if (!movementKeys.has(event.code)) return;
     event.preventDefault(); // 方向键控制游戏时不滚动页面。
-    if (!gameOver) pressedKeys.add(event.code);
+    if (!gameOver && !paused) pressedKeys.add(event.code);
   });
 
   window.addEventListener('keyup', (event) => {
@@ -178,11 +217,9 @@ if (context) {
     pressedKeys.delete(event.code);
   });
 
-  // 切换到其他窗口时清空输入，避免错过 keyup 导致一直移动。
-  window.addEventListener('blur', () => {
-    pressedKeys.clear();
-    activePointers.clear();
-    lastTime = null;
+  window.addEventListener('blur', pauseGame);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pauseGame();
   });
 
   drawScene();

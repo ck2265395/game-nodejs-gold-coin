@@ -4,10 +4,11 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 
 // 执行真实浏览器脚本；这里只提供 Canvas 和动画调度的最小接口。
-function loadGame() {
+function loadGame(autoStart = true) {
   const circles = [];
   const rectangles = [];
   const events = {};
+  const documentEvents = {};
   let nextFrame;
   const context = {
     fillRect(...args) { rectangles.push(args); },
@@ -16,27 +17,29 @@ function loadGame() {
   };
   const score = { textContent: '0' };
   const elements = {
+    '#status': { textContent: '' },
     '#score': score, '#lives': { textContent: '3' },
     '#game-over': { hidden: true }, '#final-score': { textContent: '' },
     '#restart': { addEventListener(name, handler) { this[name] = handler; } },
   };
-  for (const id of ['#move-left', '#move-right']) {
+  for (const id of ['#move-left', '#move-right', '#play']) {
     elements[id] = {
       addEventListener(name, handler) { this[name] = handler; },
       setPointerCapture() {},
     };
   }
   const sandbox = vm.createContext({
-    document: { querySelector: (selector) => elements[selector] || ({ width: 480, height: 640, getContext: () => context }) },
+    document: { addEventListener(name, handler) { documentEvents[name] = handler; }, querySelector: (selector) => elements[selector] || ({ width: 480, height: 640, getContext: () => context }) },
     window: { addEventListener(name, handler) { events[name] = handler; } },
     requestAnimationFrame(callback) { nextFrame = callback; },
   });
   vm.runInContext(fs.readFileSync('public/game.js', 'utf8'), sandbox);
+  if (autoStart && elements['#play'].click) elements['#play'].click();
   return {
     score, elements,
     run(code) { return vm.runInContext(code, sandbox); },
     frame(time) { circles.length = 0; rectangles.length = 0; nextFrame(time); return circles[0]; },
-    events, rectangles,
+    events, rectangles, documentEvents,
   };
 }
 
@@ -251,4 +254,54 @@ test('切换窗口与重新开始都会清空触控状态', () => {
   button.pointerdown(pointer()); game.elements['#restart'].click();
   game.frame(150); game.frame(200);
   assert.equal(game.run('basket.x'), 190);
+});
+
+
+test('进入页面等待开始，点击开始后金币才下落', () => {
+  const game = loadGame(false);
+  const first = game.frame(0);
+  assert.equal(game.frame(50).y, first.y);
+  assert.equal(typeof game.elements['#play'].click, 'function');
+  game.elements['#play'].click();
+  game.frame(100);
+  assert.ok(game.frame(150).y > first.y);
+});
+
+test('暂停冻结位置，继续时清空按键且不补算暂停时间', () => {
+  const game = loadGame();
+  game.frame(0);
+  game.events.keydown({ code: 'ArrowRight', preventDefault() {} });
+  game.frame(50);
+  assert.equal(typeof game.elements['#play'].click, 'function');
+  game.elements['#play'].click();
+  const position = game.run('[coin.y, basket.x].join()');
+  game.frame(10000);
+  assert.equal(game.run('[coin.y, basket.x].join()'), position);
+  game.elements['#play'].click();
+  game.frame(20000);
+  assert.equal(game.run('[coin.y, basket.x].join()'), position);
+  game.frame(20050);
+  assert.ok(game.run('coin.y') > Number(position.split(',')[0]));
+  assert.equal(game.run('basket.x'), Number(position.split(',')[1]));
+});
+
+test('失去焦点会暂停，恢复焦点后需要手动继续', () => {
+  const game = loadGame();
+  game.frame(0);
+  game.events.blur();
+  const y = game.run('coin.y');
+  game.frame(50); game.frame(100);
+  assert.equal(game.run('coin.y'), y);
+  assert.equal(game.elements['#play'].textContent, '继续游戏');
+});
+
+
+test('页面进入后台时暂停', () => {
+  const game = loadGame();
+  game.frame(0);
+  game.run('document.hidden = true');
+  game.documentEvents.visibilitychange();
+  const first = game.frame(50);
+  assert.equal(game.frame(100).y, first.y);
+  assert.equal(game.elements['#play'].textContent, '继续游戏');
 });

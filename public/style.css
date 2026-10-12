@@ -14,3 +14,8 @@ h1 { margin: 0 0 10px; font-size: 32px; }
 canvas { display: block; width: 100%; height: auto; }
 .hint { color: #62738b; font-size: 13px; line-height: 1.7; }
 #game-error { color: #a12f2f; }
+
+#game-over { margin-bottom: 16px; padding: 16px; border-radius: 12px; background: #fff; }
+#game-over h2 { margin: 0; }
+#restart { padding: 10px 20px; border: 0; border-radius: 8px; background: #315d92; color: #fff; font: inherit; cursor: pointer; }
+#restart:focus-visible { outline: 3px solid #e6a34b; outline-offset: 3px; }

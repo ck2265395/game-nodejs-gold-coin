@@ -15,14 +15,19 @@ function loadGame() {
     fill() {}, stroke() {},
   };
   const score = { textContent: '0' };
+  const elements = {
+    '#score': score, '#lives': { textContent: '3' },
+    '#game-over': { hidden: true }, '#final-score': { textContent: '' },
+    '#restart': { addEventListener(name, handler) { this[name] = handler; } },
+  };
   const sandbox = vm.createContext({
-    document: { querySelector: (selector) => selector === '#score' ? score : ({ width: 480, height: 640, getContext: () => context }) },
+    document: { querySelector: (selector) => elements[selector] || ({ width: 480, height: 640, getContext: () => context }) },
     window: { addEventListener(name, handler) { events[name] = handler; } },
     requestAnimationFrame(callback) { nextFrame = callback; },
   });
   vm.runInContext(fs.readFileSync('public/game.js', 'utf8'), sandbox);
   return {
-    score,
+    score, elements,
     run(code) { return vm.runInContext(code, sandbox); },
     frame(time) { circles.length = 0; rectangles.length = 0; nextFrame(time); return circles[0]; },
     events, rectangles,
@@ -115,4 +120,57 @@ test('金币已在篮子上沿下方时，不从侧面误计分', () => {
   game.run('coin.x = basket.x + 50; coin.y = basket.y + 20');
   game.frame(50);
   assert.equal(game.score.textContent, '0');
+});
+
+
+test('每次漏接扣一条生命，第三次漏接结束并显示最终得分', () => {
+  const game = loadGame();
+  game.frame(0);
+  game.run('coin.x = basket.x + 50; coin.y = basket.y - coin.radius - 1');
+  game.frame(50);
+  for (let i = 1; i <= 3; i++) {
+    game.run('coin.x = 30; coin.y = 660');
+    game.frame(50 + i * 50);
+    assert.equal(game.elements['#lives'].textContent, String(3 - i));
+    assert.equal(game.elements['#game-over'].hidden, i !== 3);
+  }
+  assert.equal(game.elements['#final-score'].textContent, '1');
+});
+
+test('游戏结束后金币和篮子停止，生命与得分不再变化', () => {
+  const game = loadGame();
+  game.frame(0);
+  for (let i = 1; i <= 3; i++) {
+    game.run('coin.x = 30; coin.y = 660');
+    game.frame(i * 50);
+  }
+  const position = game.run('[coin.y, basket.x].join()');
+  game.events.keydown({ code: 'ArrowRight', preventDefault() {} });
+  game.frame(200);
+  assert.equal(game.run('[coin.y, basket.x].join()'), position);
+  assert.equal(game.elements['#lives'].textContent, '0');
+  assert.equal(game.score.textContent, '0');
+});
+
+test('重新开始恢复生命和得分、清空按键、居中篮子并恢复动画', () => {
+  const game = loadGame();
+  game.frame(0);
+  game.run('coin.x = basket.x + 50; coin.y = basket.y - coin.radius - 1');
+  game.frame(50);
+  game.events.keydown({ code: 'ArrowRight', preventDefault() {} });
+  for (let i = 1; i <= 3; i++) {
+    game.run('coin.x = 30; coin.y = 660');
+    game.frame(50 + i * 50);
+  }
+  assert.equal(typeof game.elements['#restart'].click, 'function');
+  game.elements['#restart'].click();
+  assert.equal(game.score.textContent, '0');
+  assert.equal(game.elements['#lives'].textContent, '3');
+  assert.equal(game.elements['#game-over'].hidden, true);
+  assert.equal(game.run('basket.x'), 190);
+  const first = game.frame(10000);
+  assert.equal(first.y, -first.radius);
+  const second = game.frame(10050);
+  assert.ok(second.y > first.y);
+  assert.equal(game.run('basket.x'), 190);
 });

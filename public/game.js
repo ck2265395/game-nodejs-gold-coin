@@ -21,7 +21,14 @@ const coin = {
 };
 
 const scoreDisplay = document.querySelector('#score');
+const livesDisplay = document.querySelector('#lives');
+const gameOverPanel = document.querySelector('#game-over');
+const finalScoreDisplay = document.querySelector('#final-score');
+const restartButton = document.querySelector('#restart');
 let score = 0;
+let lives = 3;
+let gameOver = false;
+livesDisplay.textContent = String(lives);
 scoreDisplay.textContent = String(score);
 
 function resetCoin() {
@@ -30,6 +37,7 @@ function resetCoin() {
 }
 
 function updateCoin(deltaTime) {
+  if (gameOver) return;
   const previousBottom = coin.y + coin.radius;
   coin.y += coin.speed * deltaTime;
 
@@ -45,8 +53,16 @@ function updateCoin(deltaTime) {
     scoreDisplay.textContent = String(score);
     resetCoin();
   } else if (coin.y - coin.radius > canvas.height) {
-    // 漏接不扣分，完全离开底部后继续下一枚。
-    resetCoin();
+    lives -= 1;
+    livesDisplay.textContent = String(lives);
+    if (lives === 0) {
+      gameOver = true;
+      pressedKeys.clear();
+      finalScoreDisplay.textContent = String(score);
+      gameOverPanel.hidden = false;
+    } else {
+      resetCoin();
+    }
   }
 }
 
@@ -72,8 +88,10 @@ function gameLoop(currentTime) {
   // 切换窗口后限制时间差，避免恢复时篮子突然跳很远。
   const deltaTime = lastTime === null ? 0 : Math.min((currentTime - lastTime) / 1000, 0.05);
   lastTime = currentTime;
-  updateBasket(deltaTime);
-  updateCoin(deltaTime);
+  if (!gameOver) {
+    updateBasket(deltaTime);
+    updateCoin(deltaTime);
+  }
   drawScene();
   requestAnimationFrame(gameLoop);
 }
@@ -107,11 +125,28 @@ function drawScene() {
   }
 }
 
+function restartGame() {
+  score = 0;
+  lives = 3;
+  gameOver = false;
+  scoreDisplay.textContent = String(score);
+  livesDisplay.textContent = String(lives);
+  finalScoreDisplay.textContent = '';
+  gameOverPanel.hidden = true;
+  basket.x = (canvas.width - basket.width) / 2;
+  pressedKeys.clear();
+  lastTime = null;
+  resetCoin();
+  drawScene();
+  // 原有动画循环继续运行，重开时不再创建第二条循环。
+}
+
 if (context) {
+  restartButton.addEventListener('click', restartGame);
   window.addEventListener('keydown', (event) => {
     if (!movementKeys.has(event.code)) return;
     event.preventDefault(); // 方向键控制游戏时不滚动页面。
-    pressedKeys.add(event.code);
+    if (!gameOver) pressedKeys.add(event.code);
   });
 
   window.addEventListener('keyup', (event) => {

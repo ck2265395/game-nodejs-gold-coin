@@ -3,20 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>接金币 · 第二步</title>
+  <title>接金币 · 第四步</title>
   <link rel="stylesheet" href="/style.css">
   <script src="/game.js" defer></script>
 </head>
 <body>
   <main>
-    <p class="eyebrow">我的第一个小游戏 · 02</p>
+    <p class="eyebrow">我的第一个小游戏 · 04</p>
     <h1>接金币</h1>
     <p class="intro">按住 ← → 或 A、D，让篮子左右移动。</p>
+    <p class="score">得分：<span id="score">0</span></p>
     <div class="game-frame">
-      <canvas id="game" width="480" height="640" aria-label="接金币游戏区域：背景、地面和底部篮子">你的浏览器不支持 Canvas，请使用现代浏览器。</canvas>
+      <canvas id="game" width="480" height="640" aria-label="接金币游戏区域：下落金币、背景、地面和底部篮子">你的浏览器不支持 Canvas，请使用现代浏览器。</canvas>
     </div>
     <p id="game-error" role="alert" hidden></p>
-    <p class="hint">先点击页面，再试试键盘。松开停止，篮子不会超出画布。本节暂时没有金币。</p>
+    <p class="hint">先点击页面，再试试键盘。松开停止，篮子不会超出画布。接住金币加 1 分，漏接不扣分；每枚金币结束后都会从顶部重新出现。</p>
     <noscript>请启用 JavaScript 以显示游戏画面。</noscript>
   </main>
 </body>

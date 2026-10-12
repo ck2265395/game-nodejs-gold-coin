@@ -12,6 +12,44 @@ const basket = {
   speed: 300, // 每秒移动 300 个画布像素。
 };
 
+// 金币的 x、y 是圆心坐标；从画布顶部外侧开始下落。
+const coin = {
+  radius: 12,
+  x: canvas.width / 2,
+  y: -12,
+  speed: 180, // 每秒下落 180 个画布像素。
+};
+
+const scoreDisplay = document.querySelector('#score');
+let score = 0;
+scoreDisplay.textContent = String(score);
+
+function resetCoin() {
+  coin.y = -coin.radius;
+  coin.x = coin.radius + Math.random() * (canvas.width - coin.radius * 2);
+}
+
+function updateCoin(deltaTime) {
+  const previousBottom = coin.y + coin.radius;
+  coin.y += coin.speed * deltaTime;
+
+  // 用金币的包围盒检查横向重叠；底边必须从上方跨过篮子上沿。
+  // 比较前后两帧，避免金币跨过上沿时漏判，也避免从侧面移入时误计分。
+  const overlapsBasket = coin.x + coin.radius >= basket.x
+    && coin.x - coin.radius <= basket.x + basket.width;
+  const reachesBasket = previousBottom <= basket.y
+    && coin.y + coin.radius >= basket.y;
+
+  if (overlapsBasket && reachesBasket) {
+    score += 1;
+    scoreDisplay.textContent = String(score);
+    resetCoin();
+  } else if (coin.y - coin.radius > canvas.height) {
+    // 漏接不扣分，完全离开底部后继续下一枚。
+    resetCoin();
+  }
+}
+
 // 记录哪些键正在按住，而不是每次按键事件只移动一次。
 const pressedKeys = new Set();
 const movementKeys = new Set(['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD']);
@@ -35,6 +73,7 @@ function gameLoop(currentTime) {
   const deltaTime = lastTime === null ? 0 : Math.min((currentTime - lastTime) / 1000, 0.05);
   lastTime = currentTime;
   updateBasket(deltaTime);
+  updateCoin(deltaTime);
   drawScene();
   requestAnimationFrame(gameLoop);
 }
@@ -43,6 +82,15 @@ function drawScene() {
   // 每次绘制都先覆盖背景，以后加入动画时也会用到这一步。
   context.fillStyle = '#dceefa';
   context.fillRect(0, 0, canvas.width, canvas.height);
+
+  // arc 的圆心、半径和起止角度决定金币形状。
+  context.beginPath();
+  context.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
+  context.fillStyle = '#f5c542';
+  context.fill();
+  context.strokeStyle = '#b87916';
+  context.lineWidth = 2;
+  context.stroke();
 
   context.fillStyle = '#bfd8b8';
   context.fillRect(0, canvas.height - 32, canvas.width, 32);

@@ -1,0 +1,118 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const fs = require('node:fs');
+
+// 执行真实浏览器脚本；这里只提供 Canvas 和动画调度的最小接口。
+function loadGame() {
+  const circles = [];
+  const rectangles = [];
+  const events = {};
+  let nextFrame;
+  const context = {
+    fillRect(...args) { rectangles.push(args); },
+    beginPath() {}, arc(x, y, radius) { circles.push({ x, y, radius }); },
+    fill() {}, stroke() {},
+  };
+  const score = { textContent: '0' };
+  const sandbox = vm.createContext({
+    document: { querySelector: (selector) => selector === '#score' ? score : ({ width: 480, height: 640, getContext: () => context }) },
+    window: { addEventListener(name, handler) { events[name] = handler; } },
+    requestAnimationFrame(callback) { nextFrame = callback; },
+  });
+  vm.runInContext(fs.readFileSync('public/game.js', 'utf8'), sandbox);
+  return {
+    score,
+    run(code) { return vm.runInContext(code, sandbox); },
+    frame(time) { circles.length = 0; rectangles.length = 0; nextFrame(time); return circles[0]; },
+    events, rectangles,
+  };
+}
+
+test('金币随动画帧下落，水平位置不变', () => {
+  const game = loadGame();
+  const first = game.frame(0);
+  assert.ok(first, '应绘制金币');
+  const second = game.frame(50);
+  assert.ok(second.y > first.y);
+  assert.equal(second.x, first.x);
+  assert.equal(second.radius, first.radius);
+});
+
+test('金币完全离开底部后从顶部重生，横向位置在画布内', () => {
+  const game = loadGame();
+  game.run('coin.x = 30'); // 避开篮子，验证漏接重生。
+  let previous = game.frame(0);
+  assert.ok(previous, '应绘制金币');
+  let respawned = false;
+  for (let time = 50; time <= 10000; time += 50) {
+    const current = game.frame(time);
+    if (current.y < previous.y) {
+      assert.ok(previous.y + current.radius >= 640);
+      assert.equal(current.y, -current.radius);
+      assert.ok(current.x >= current.radius && current.x <= 480 - current.radius);
+      respawned = true;
+      break;
+    }
+    previous = current;
+  }
+  assert.ok(respawned, '应在合理时间内重生');
+});
+
+test('原有篮子按键移动并在松开后停止', () => {
+  const game = loadGame();
+  game.frame(0);
+  const initial = game.rectangles[2][0];
+  game.events.keydown({ code: 'ArrowRight', preventDefault() {} });
+  game.frame(50);
+  const moved = game.rectangles[2][0];
+  assert.ok(moved > initial);
+  game.events.keyup({ code: 'ArrowRight', preventDefault() {} });
+  game.frame(100);
+  assert.equal(game.rectangles[2][0], moved);
+});
+
+
+test('金币到达篮子上沿时加一分并重生，只计一次', () => {
+  const game = loadGame();
+  game.frame(0);
+  game.run('coin.x = basket.x + basket.width / 2; coin.y = basket.y - coin.radius - 1');
+  assert.equal(game.score.textContent, '0');
+  const current = game.frame(50);
+  assert.equal(game.score.textContent, '1');
+  assert.equal(current.y, -current.radius);
+  game.frame(100);
+  assert.equal(game.score.textContent, '1');
+});
+
+test('金币漏接后重生，不加分', () => {
+  const game = loadGame();
+  game.frame(0);
+  game.run('coin.x = 30; coin.y = canvas.height + coin.radius - 1');
+  const current = game.frame(50);
+  assert.equal(current.y, -current.radius);
+  assert.equal(game.score.textContent, '0');
+});
+
+for (const [name, offset, caught] of [
+  ['左边缘相切', -12, true],
+  ['左侧差一个像素', -13, false],
+  ['右边缘相切', 112, true],
+  ['右侧差一个像素', 113, false],
+]) {
+  test(`接住边界：${name}`, () => {
+    const game = loadGame();
+    game.frame(0);
+    game.run(`coin.x = basket.x + ${offset}; coin.y = basket.y - coin.radius - 1`);
+    game.frame(50);
+    assert.equal(game.score.textContent, caught ? '1' : '0');
+  });
+}
+
+test('金币已在篮子上沿下方时，不从侧面误计分', () => {
+  const game = loadGame();
+  game.frame(0);
+  game.run('coin.x = basket.x + 50; coin.y = basket.y + 20');
+  game.frame(50);
+  assert.equal(game.score.textContent, '0');
+});
